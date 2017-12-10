@@ -12,6 +12,7 @@ describe Contact do
       firstname: 'Aaron',
       lastname: 'Sumner',
       email: 'tester@example.com')
+      contact.valid?
     expect(contact).to be_valid
   end
 
