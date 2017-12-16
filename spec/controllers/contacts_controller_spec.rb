@@ -1,6 +1,9 @@
 require 'rails_helper'
 
 describe ContactsController do
+  let(:contact) do
+    create(:contact, firstname: 'Lawrence', lastname: 'Smith')
+  end
   shared_examples 'public access to contacts' do
     describe 'GET #index' do
       context 'with params[:letter]' do
@@ -33,15 +36,21 @@ describe ContactsController do
     end
 
     describe 'GET #show' do
-      it "assigns the requested contact to @contact" do
-        contact = create(:contact)
+      let(:contact) { build_stubbed(:contact, firstname: 'Lawrence', lastname: 'Smith')}
+
+      before :each do
+        allow(contact).to receive(:persisted?).and_return(true)
+        allow(Contact).to receive(:order).with('lastname, firstname').and_return([contact])
+        allow(Contact).to receive(:find).with(contact.id.to_s).and_return(contact)
+        allow(contact).to receive(:save).and_return(true)
         get :show, id: contact
+      end
+
+      it "assigns the requested contact to contact" do
         expect(assigns(:contact)).to eq contact
       end
 
       it "renders the :show template" do
-        contact = create(:contact)
-        get :show, id: contact
         expect(response).to render_template :show
       end
     end
@@ -49,7 +58,7 @@ describe ContactsController do
 
   shared_examples 'full access to contacts' do
     describe 'GET #new' do
-      it "assigns a new Contact to @contact" do
+      it "assigns a new Contact to contact" do
         get :new
         expect(assigns(:contact)).to be_a_new(Contact)
       end
@@ -61,7 +70,7 @@ describe ContactsController do
     end
 
     describe 'GET #edit' do
-      it "assigns the requested contact to @contact" do
+      it "assigns the requested contact to contact" do
         contact = create(:contact)
         get :edit, id: contact
         expect(assigns(:contact)).to eq contact
@@ -115,47 +124,41 @@ describe ContactsController do
     end
 
     describe 'PATCH #update' do
-      before :each do
-        @contact = create(:contact,
-          firstname: 'Lawrence',
-          lastname: 'Smith')
-      end
-
       context "valid attributes" do
-        it "locates the requested @contact" do
-          patch :update, id: @contact, contact: attributes_for(:contact)
-          expect(assigns(:contact)).to eq(@contact)
+        it "locates the requested contact" do
+          patch :update, id: contact, contact: attributes_for(:contact)
+          expect(assigns(:contact)).to eq(contact)
         end
 
-        it "changes @contact's attributes" do
-          patch :update, id: @contact,
+        it "changes contact's attributes" do
+          patch :update, id: contact,
             contact: attributes_for(:contact,
               firstname: 'Larry',
               lastname: 'Smith')
-          @contact.reload
-          expect(@contact.firstname).to eq('Larry')
-          expect(@contact.lastname).to eq('Smith')
+          contact.reload
+          expect(contact.firstname).to eq('Larry')
+          expect(contact.lastname).to eq('Smith')
         end
 
         it "redirects to the updated contact" do
-          patch :update, id: @contact, contact: attributes_for(:contact)
-          expect(response).to redirect_to @contact
+          patch :update, id: contact, contact: attributes_for(:contact)
+          expect(response).to redirect_to contact
         end
       end
 
       context "with invalid attributes" do
         it "does not change the contact's attributes" do
-          patch :update, id: @contact,
+          patch :update, id: contact,
             contact: attributes_for(:contact,
               firstname: 'Larry',
               lastname: nil)
-          @contact.reload
-          expect(@contact.firstname).not_to eq('Larry')
-          expect(@contact.lastname).to eq('Smith')
+          contact.reload
+          expect(contact.firstname).not_to eq('Larry')
+          expect(contact.lastname).to eq('Smith')
         end
 
         it "re-renders the edit template" do
-          patch :update, id: @contact,
+          patch :update, id: contact,
             contact: attributes_for(:invalid_contact)
           expect(response).to render_template :edit
         end
@@ -163,18 +166,15 @@ describe ContactsController do
     end
 
     describe 'DELETE #destroy' do
-      before :each do
-        @contact = create(:contact)
-      end
-
       it "deletes the contact" do
+        contact
         expect{
-          delete :destroy, id: @contact
+          delete :destroy, id: contact
         }.to change(Contact,:count).by(-1)
       end
 
       it "redirects to contacts#index" do
-        delete :destroy, id: @contact
+        delete :destroy, id: contact
         expect(response).to redirect_to contacts_url
       end
     end
