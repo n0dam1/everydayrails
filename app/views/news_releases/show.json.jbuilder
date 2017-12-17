@@ -1,1 +1,1 @@
-json.partial! "news_releases/news_release", news_release: @news_release
+json.extract! @news_release, :id, :title, :released_on, :body, :created_at, :updated_at
