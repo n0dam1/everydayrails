@@ -1,5 +1,3 @@
-require 'faker'
-
 FactoryGirl.define do
   factory :news_release do
     title "Test news release"
