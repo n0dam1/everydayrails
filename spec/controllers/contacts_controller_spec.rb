@@ -1,10 +1,25 @@
 require 'rails_helper'
 
 describe ContactsController do
+  let(:admin) { build_stubbed(:admin) }
+  let(:user) { build_stubbed(:user) }
+
   let(:contact) do
     create(:contact, firstname: 'Lawrence', lastname: 'Smith')
   end
-  shared_examples 'public access to contacts' do
+
+  let(:phones) do
+    [
+      attributes_for(:phone, phone_type: "home"),
+      attributes_for(:phone, phone_type: "office"),
+      attributes_for(:phone, phone_type: "mobile")
+    ]
+  end
+
+  let(:valid_attributes) { attributes_for(:contact) }
+  let(:invalid_attributes) { attributes_for(:invalid_contact) }
+
+  shared_examples_for 'public access to contacts' do
     describe 'GET #index' do
       context 'with params[:letter]' do
         it "populates an array of contacts starting with the letter" do
@@ -36,17 +51,21 @@ describe ContactsController do
     end
 
     describe 'GET #show' do
-      let(:contact) { build_stubbed(:contact, firstname: 'Lawrence', lastname: 'Smith')}
+      let(:contact) { build_stubbed(:contact,
+        firstname: 'Lawrence', lastname: 'Smith') }
 
       before :each do
-        allow(contact).to receive(:persisted?).and_return(true)
-        allow(Contact).to receive(:order).with('lastname, firstname').and_return([contact])
-        allow(Contact).to receive(:find).with(contact.id.to_s).and_return(contact)
-        allow(contact).to receive(:save).and_return(true)
+        allow(Contact).to receive(:persisted?).and_return(true)
+        allow(Contact).to \
+          receive(:order).with('lastname, firstname').and_return([contact])
+        allow(Contact).to \
+          receive(:find).with(contact.id.to_s).and_return(contact)
+        allow(Contact).to receive(:save).and_return(true)
+
         get :show, id: contact
       end
 
-      it "assigns the requested contact to contact" do
+      it "assigns the requested contact to @contact" do
         expect(assigns(:contact)).to eq contact
       end
 
@@ -58,9 +77,17 @@ describe ContactsController do
 
   shared_examples 'full access to contacts' do
     describe 'GET #new' do
-      it "assigns a new Contact to contact" do
+      it "assigns a new Contact to @contact" do
         get :new
         expect(assigns(:contact)).to be_a_new(Contact)
+      end
+
+      it "assigns a home, office, and mobile phone to the new contact" do
+        get :new
+        phones = assigns(:contact).phones.map do |p|
+          p.phone_type
+        end
+        expect(phones).to match_array %w(home office mobile)
       end
 
       it "renders the :new template" do
@@ -70,7 +97,7 @@ describe ContactsController do
     end
 
     describe 'GET #edit' do
-      it "assigns the requested contact to contact" do
+      it "assigns the requested contact to @contact" do
         contact = create(:contact)
         get :edit, id: contact
         expect(assigns(:contact)).to eq contact
@@ -101,8 +128,9 @@ describe ContactsController do
         end
 
         it "redirects to contacts#show" do
-          post :create, contact: attributes_for(:contact,
-            phones_attributes: @phones)
+          post :create,
+            contact: attributes_for(:contact,
+              phones_attributes: @phones)
           expect(response).to redirect_to contact_path(assigns[:contact])
         end
       end
@@ -124,48 +152,64 @@ describe ContactsController do
     end
 
     describe 'PATCH #update' do
+      before :each do
+        @contact = create(:contact,
+          firstname: 'Lawrence',
+          lastname: 'Smith'
+        )
+      end
+
       context "valid attributes" do
-        it "locates the requested contact" do
-          patch :update, id: contact, contact: attributes_for(:contact)
-          expect(assigns(:contact)).to eq(contact)
+        it "locates the requested @contact" do
+          allow(contact).to \
+            receive(:update).with(valid_attributes.stringify_keys) { true }
+          patch :update, id: @contact,
+            contact: attributes_for(:contact)
+          expect(assigns(:contact)).to eq @contact
         end
 
-        it "changes contact's attributes" do
-          patch :update, id: contact,
+        it "changes the contact's attributes" do
+          patch :update, id: @contact,
             contact: attributes_for(:contact,
               firstname: 'Larry',
-              lastname: 'Smith')
-          contact.reload
-          expect(contact.firstname).to eq('Larry')
-          expect(contact.lastname).to eq('Smith')
+              lastname: 'Smith'
+            )
+          @contact.reload
+          expect(@contact.firstname).to eq 'Larry'
+          expect(@contact.lastname).to eq 'Smith'
         end
 
         it "redirects to the updated contact" do
-          patch :update, id: contact, contact: attributes_for(:contact)
-          expect(response).to redirect_to contact
+          patch :update, id: @contact, contact: attributes_for(:contact)
+          expect(response).to redirect_to @contact
         end
       end
 
-      context "with invalid attributes" do
-        it "does not change the contact's attributes" do
-          patch :update, id: contact,
-            contact: attributes_for(:contact,
-              firstname: 'Larry',
-              lastname: nil)
-          contact.reload
-          expect(contact.firstname).not_to eq('Larry')
-          expect(contact.lastname).to eq('Smith')
+      context "invalid attributes" do
+        before :each do
+          allow(contact).to receive(:update).with(invalid_attributes.stringify_keys) { false }
+          patch :update, id: contact, contact: invalid_attributes
         end
 
-        it "re-renders the edit template" do
-          patch :update, id: contact,
-            contact: attributes_for(:invalid_contact)
+        it "locates the requested @contact" do
+          expect(assigns(:contact)).to eq contact
+        end
+
+        it "does not change the contact's attributes" do
+          expect(assigns(:contact).reload.attributes).to eq contact.attributes
+        end
+
+        it "re-renders the edit method" do
           expect(response).to render_template :edit
         end
       end
     end
 
     describe 'DELETE #destroy' do
+      before :each do
+        @contact = create(:contact)
+      end
+
       it "deletes the contact" do
         contact
         expect{
@@ -174,7 +218,7 @@ describe ContactsController do
       end
 
       it "redirects to contacts#index" do
-        delete :destroy, id: contact
+        delete :destroy, id: @contact
         expect(response).to redirect_to contacts_url
       end
     end
@@ -182,27 +226,29 @@ describe ContactsController do
 
   describe "administrator access" do
     before :each do
-      set_user_session create(:admin)
+      allow(controller).to receive(:current_user).and_return(admin)
     end
+
     it_behaves_like 'public access to contacts'
     it_behaves_like 'full access to contacts'
   end
 
   describe "user access" do
     before :each do
-      set_user_session create(:user)
+      allow(controller).to receive(:current_user).and_return(user)
     end
+
     it_behaves_like 'public access to contacts'
     it_behaves_like 'full access to contacts'
   end
 
   describe "guest access" do
-    it_behaves_like "public access to contacts"
+    it_behaves_like 'public access to contacts'
 
     describe 'GET #new' do
       it "requires login" do
         get :new
-        expect(response).to redirect_to login_url
+        expect(response).to require_login
       end
     end
 
